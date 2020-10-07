@@ -7,10 +7,9 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
 import android.widget.Button;
-import android.widget.ListPopupWindow;
 import android.widget.TextView;
+import org.threeten.bp.LocalDate;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -88,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
         inputCardID =  findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
 
+        cldView.setSelectedDate(CalendarDay.today());
+
         if (arrSuggestCardID != null && arrSuggestCardID.size() > 0) {
             inputCardID.setText(arrSuggestCardID.get(arrSuggestCardID.size() - 1));
         }
@@ -137,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
                                             Integer.parseInt(cardDate.substring(0,2))));
                                     arrAllCardTime.add(new CardDate(cardDate, cardTime));
                                 }
+                                cldView.removeDecorators();
                                 cldView.addDecorator(new EventDecorator(MainActivity.this,  mCldDays));
                                 updateList(CommonUtils.getDateFromCalendar(cldView.getSelectedDate()));
                             }

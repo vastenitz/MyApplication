@@ -22,7 +22,8 @@ public class CommonUtils {
 
     public static String getDateFromCalendar(CalendarDay cldDay) {
         if (cldDay != null) {
-            String searchDate = cldDay.getDay() + "";
+            String searchDate =  "";
+            searchDate += cldDay.getDay() > 9? cldDay.getDay() : "0" + cldDay.getDay();
             searchDate += cldDay.getMonth() > 9 ? cldDay.getMonth() : "0" + cldDay.getMonth();
             searchDate += cldDay.getYear();
             return searchDate;
