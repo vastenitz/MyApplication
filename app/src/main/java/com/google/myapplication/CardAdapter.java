@@ -3,6 +3,7 @@ package com.google.myapplication;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -13,9 +14,11 @@ import java.util.ArrayList;
 public class CardAdapter extends RecyclerView.Adapter<CardAdapter.ViewHolder> {
 
     private ArrayList<String> arrCardTime;
+    private int type;
 
-    public CardAdapter(ArrayList<String> data) {
+    public CardAdapter(ArrayList<String> data, int type) {
         this.arrCardTime = data;
+        this.type = type;
     }
 
     @NonNull
@@ -29,6 +32,11 @@ public class CardAdapter extends RecyclerView.Adapter<CardAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         holder.tvTimeCard.setText(arrCardTime.get(position));
+        if (type == 0) {
+            holder.imgCard.setImageResource(R.drawable.rfid);
+        } else if (type == 1) {
+            holder.imgCard.setImageResource(R.drawable.ic_cup);
+        }
     }
 
     @Override
@@ -38,9 +46,11 @@ public class CardAdapter extends RecyclerView.Adapter<CardAdapter.ViewHolder> {
 
     public class ViewHolder extends RecyclerView.ViewHolder{
         private TextView tvTimeCard;
+        private ImageView imgCard;
         public ViewHolder(View itemView) {
             super(itemView);
             tvTimeCard = itemView.findViewById(R.id.tv_time);
+            imgCard = itemView.findViewById(R.id.img_item);
         }
     }
 }

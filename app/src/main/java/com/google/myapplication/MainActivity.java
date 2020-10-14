@@ -1,14 +1,19 @@
 package com.google.myapplication;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.icu.text.IDNA;
 import android.os.Bundle;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
+
 import org.threeten.bp.LocalDate;
 
 import androidx.annotation.NonNull;
@@ -32,14 +37,17 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 
+import static android.view.View.GONE;
+
 public class MainActivity extends AppCompatActivity {
 
     private DatabaseReference myRef;
-    private Button btnGetCheck;
+    private FirebaseDatabase mFirebase;
+    private Button btnUpdateData, btnInfo;
     private CardAutoCompleteTextView inputCardID;
     private MaterialCalendarView cldView;
-    private RecyclerView rcvCard;
-    private CardAdapter mCardAdapter;
+    private RecyclerView rcvCheckInOut, rcvWater;
+    private CardAdapter mCheckInOutAdapter, mWaterAdapter;
     private Query query;
     private ArrayList<CardDate> arrAllCardTime = new ArrayList<>();
     private ArrayList<String> arrChooseCardTime = new ArrayList<>();
@@ -48,43 +56,56 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<String> arrSuggestCardID = new ArrayList<>();
     private ArrayAdapter suggestAdapter;
     private HashSet<CalendarDay> mCldDays = new HashSet<>();
+    private RadioGroup optionRdg;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mSharedPreferences = getSharedPreferences("RFIDPreference",  Context.MODE_PRIVATE);
+        mSharedPreferences = getSharedPreferences("RFIDPreference", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = mSharedPreferences.edit();
         Gson gson = new Gson();
         String json = mSharedPreferences.getString("suggest", "");
-        if(!json.isEmpty()) {
-            Type type = new TypeToken<ArrayList<String>>(){}.getType();
+        if (!json.isEmpty()) {
+            Type type = new TypeToken<ArrayList<String>>() {
+            }.getType();
             arrSuggestCardID = gson.fromJson(json, type);
         }
 
         // Write a message to the database
-        myRef = FirebaseDatabase.getInstance().getReference("RFID");
-        rcvCard = findViewById(R.id.rcv_data);
-        mCardAdapter = new CardAdapter(arrChooseCardTime);
+        mFirebase = FirebaseDatabase.getInstance();
+        rcvCheckInOut = findViewById(R.id.rcv_check_in_out);
+        rcvWater = findViewById(R.id.rcv_water);
+        mCheckInOutAdapter = new CardAdapter(arrChooseCardTime, 0);
+        mWaterAdapter = new CardAdapter(arrChooseCardTime, 1);
         tvNotFound = findViewById(R.id.tv_not_found);
         tvNotInputCardID = findViewById(R.id.tv_not_input_card);
         tvCardNotExist = findViewById(R.id.tv_card_not_exist);
+        optionRdg = findViewById(R.id.option_rg);
 
         LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
         mLayoutManager.setOrientation(RecyclerView.VERTICAL);
 
-        rcvCard.setLayoutManager(mLayoutManager);
-        rcvCard.setAdapter(mCardAdapter);
+        rcvCheckInOut.setLayoutManager(mLayoutManager);
+        rcvCheckInOut.setAdapter(mCheckInOutAdapter);
 
-        tvNotFound.setVisibility(View.GONE);
-        rcvCard.setVisibility(View.GONE);
-        tvNotInputCardID.setVisibility(View.GONE);
-        tvCardNotExist.setVisibility(View.GONE);
+        LinearLayoutManager mWaterLayoutManager = new LinearLayoutManager(this);
+        mWaterLayoutManager.setOrientation(RecyclerView.VERTICAL);
+
+        rcvWater.setLayoutManager(mWaterLayoutManager);
+        rcvWater.setAdapter(mWaterAdapter);
+
+        tvNotFound.setVisibility(GONE);
+        rcvCheckInOut.setVisibility(GONE);
+        rcvWater.setVisibility(GONE);
+        tvNotInputCardID.setVisibility(GONE);
+        tvCardNotExist.setVisibility(GONE);
 
         //myRef.setValue();
-        btnGetCheck =  findViewById(R.id.btn_get_card);
-        inputCardID =  findViewById(R.id.input_card);
+        btnUpdateData = findViewById(R.id.btn_get_data);
+        btnInfo = findViewById(R.id.btn_get_info);
+        inputCardID = findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
 
         cldView.setSelectedDate(CalendarDay.today());
@@ -99,72 +120,89 @@ public class MainActivity extends AppCompatActivity {
 
         inputCardID.setImeOptions(EditorInfo.IME_ACTION_DONE);
 
-        btnGetCheck.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
-                imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
-                if (!inputCardID.getText().toString().equals("")) {
-                    query = myRef.child(inputCardID.getText().toString()).orderByValue();
-                    query.addListenerForSingleValueEvent(new ValueEventListener() {
-                        @Override
-                        public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                            Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
-                            if (dataSnapshot.getChildrenCount() == 0) {
-                                tvNotFound.setVisibility(View.GONE);
-                                rcvCard.setVisibility(View.GONE);
-                                tvNotInputCardID.setVisibility(View.GONE);
-                                tvCardNotExist.setVisibility(View.VISIBLE);
-                            } else {
-                                Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
-                                arrAllCardTime.clear();
-                                if (!arrSuggestCardID.contains(inputCardID.getText().toString())) {
-                                    arrSuggestCardID.add(inputCardID.getText().toString());
-                                    suggestAdapter = new ArrayAdapter(MainActivity.this, android.R.layout.simple_list_item_1, arrSuggestCardID);
-                                    inputCardID.setAdapter(suggestAdapter);
-                                    Gson gson = new Gson();
-                                    String json = gson.toJson(arrSuggestCardID);
-                                    SharedPreferences.Editor editor = mSharedPreferences.edit();
-                                    editor.putString("suggest", json);
-                                    editor.commit();
-                                }
-                                mCldDays.clear();
+        ((RadioButton) optionRdg.getChildAt(0)).setChecked(true);
 
-                                while (iterator.hasNext()) {
-                                    DataSnapshot next = iterator.next();
-                                    String cardDate = CommonUtils.getDate((Long) next.getValue());
-                                    String cardTime = CommonUtils.getTime((Long) next.getValue());
-                                    mCldDays.add(CalendarDay.from(Integer.parseInt(cardDate.substring(4,8)), Integer.parseInt(cardDate.substring(2,4)),
-                                            Integer.parseInt(cardDate.substring(0,2))));
-                                    arrAllCardTime.add(new CardDate(cardDate, cardTime));
-                                }
-                                cldView.removeDecorators();
-                                cldView.addDecorator(new EventDecorator(MainActivity.this,  mCldDays));
-                                updateList(CommonUtils.getDateFromCalendar(cldView.getSelectedDate()));
-                            }
-                        }
+        getCurrentData(0);
 
-                        @Override
-                        public void onCancelled(@NonNull DatabaseError databaseError) {
+        btnUpdateData.setOnClickListener(view -> {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            getCurrentData(getCurrentSelectedRadioButtonIndex());
+        });
 
-                        }
-                    });
-
-                } else {
-                    tvNotFound.setVisibility(View.GONE);
-                    rcvCard.setVisibility(View.GONE);
-                    tvNotInputCardID.setVisibility(View.VISIBLE);
-                    tvCardNotExist.setVisibility(View.GONE);
-                }
-            }
+        btnInfo.setOnClickListener(view -> {
+            Intent mIntent = new Intent(MainActivity.this, InfoActivity.class);
+            startActivity(mIntent);
         });
 
         cldView.setOnDateChangedListener((widget, date, selected) -> updateList(CommonUtils.getDateFromCalendar(date)));
+
+        optionRdg.setOnCheckedChangeListener((group, checkedId) -> {
+            getCurrentData(getCurrentSelectedRadioButtonIndex());
+        });
+    }
+
+    private void getCurrentData(int index) {
+        if (!inputCardID.getText().toString().equals("")) {
+            String referenceString = "RFID";
+            myRef = mFirebase.getReference(referenceString);
+            query = myRef.child(inputCardID.getText().toString()).orderByValue();
+            query.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
+                    if (dataSnapshot.getChildrenCount() == 0) {
+                        tvNotFound.setVisibility(GONE);
+                        rcvCheckInOut.setVisibility(GONE);
+                        tvNotInputCardID.setVisibility(GONE);
+                        tvCardNotExist.setVisibility(View.VISIBLE);
+                    } else {
+                        Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
+                        arrAllCardTime.clear();
+                        if (!arrSuggestCardID.contains(inputCardID.getText().toString())) {
+                            arrSuggestCardID.add(inputCardID.getText().toString());
+                            suggestAdapter = new ArrayAdapter(MainActivity.this, android.R.layout.simple_list_item_1, arrSuggestCardID);
+                            inputCardID.setAdapter(suggestAdapter);
+                            Gson gson = new Gson();
+                            String json = gson.toJson(arrSuggestCardID);
+                            SharedPreferences.Editor editor = mSharedPreferences.edit();
+                            editor.putString("suggest", json);
+                            editor.commit();
+                        }
+                        mCldDays.clear();
+
+                        while (iterator.hasNext()) {
+                            DataSnapshot next = iterator.next();
+                            String cardDate = CommonUtils.getDate((Long) next.getValue());
+                            String cardTime = CommonUtils.getTime((Long) next.getValue());
+                            mCldDays.add(CalendarDay.from(Integer.parseInt(cardDate.substring(4, 8)), Integer.parseInt(cardDate.substring(2, 4)),
+                                    Integer.parseInt(cardDate.substring(0, 2))));
+                            arrAllCardTime.add(new CardDate(cardDate, cardTime));
+                        }
+                        cldView.removeDecorators();
+                        cldView.addDecorator(new EventDecorator(MainActivity.this, mCldDays));
+                        updateList(CommonUtils.getDateFromCalendar(cldView.getSelectedDate()));
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+
+        } else {
+            tvNotFound.setVisibility(GONE);
+            rcvCheckInOut.setVisibility(GONE);
+            tvNotInputCardID.setVisibility(View.VISIBLE);
+            tvCardNotExist.setVisibility(GONE);
+        }
     }
 
     void updateList(String daySelected) {
         arrChooseCardTime.clear();
         boolean isFound = false;
+        int currentSelectedIndex = getCurrentSelectedRadioButtonIndex();
         for (int i = 0; i < arrAllCardTime.size(); i++) {
             if (arrAllCardTime.get(i).getCardDay().equals(daySelected)) {
                 isFound = true;
@@ -173,18 +211,35 @@ public class MainActivity extends AppCompatActivity {
                 break;
             }
         }
+
         if (arrChooseCardTime.size() > 0) {
-            tvNotFound.setVisibility(View.GONE);
-            rcvCard.setVisibility(View.VISIBLE);
-            tvNotInputCardID.setVisibility(View.GONE);
-            tvCardNotExist.setVisibility(View.GONE);
+            tvNotFound.setVisibility(GONE);
+            if (currentSelectedIndex == 0) {
+                rcvCheckInOut.setVisibility(View.VISIBLE);
+                rcvWater.setVisibility(GONE);
+            } else if (currentSelectedIndex == 1) {
+                rcvCheckInOut.setVisibility(GONE);
+                rcvWater.setVisibility(View.VISIBLE);
+            } else {
+                rcvWater.setVisibility(GONE);
+                rcvCheckInOut.setVisibility(GONE);
+            }
+            tvNotInputCardID.setVisibility(GONE);
+            tvCardNotExist.setVisibility(GONE);
         } else {
             tvNotFound.setVisibility(View.VISIBLE);
-            rcvCard.setVisibility(View.GONE);
-            tvNotInputCardID.setVisibility(View.GONE);
-            tvCardNotExist.setVisibility(View.GONE);
+            rcvCheckInOut.setVisibility(GONE);
+            rcvWater.setVisibility(GONE);
+            tvNotInputCardID.setVisibility(GONE);
+            tvCardNotExist.setVisibility(GONE);
         }
-        mCardAdapter.notifyDataSetChanged();
+        mCheckInOutAdapter.notifyDataSetChanged();
+        mWaterAdapter.notifyDataSetChanged();
+    }
 
+    private int getCurrentSelectedRadioButtonIndex() {
+        int radioButtonID = optionRdg.getCheckedRadioButtonId();
+        View radioButton = optionRdg.findViewById(radioButtonID);
+        return optionRdg.indexOfChild(radioButton);
     }
 }
