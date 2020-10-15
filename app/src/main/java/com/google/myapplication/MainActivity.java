@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.icu.text.IDNA;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -41,14 +42,14 @@ import static android.view.View.GONE;
 
 public class MainActivity extends AppCompatActivity {
 
-    private DatabaseReference myRef;
+    private DatabaseReference myRef, myStudentRef;
     private FirebaseDatabase mFirebase;
     private Button btnUpdateData, btnInfo;
     private CardAutoCompleteTextView inputCardID;
     private MaterialCalendarView cldView;
     private RecyclerView rcvCheckInOut, rcvWater;
     private CardAdapter mCheckInOutAdapter, mWaterAdapter;
-    private Query query;
+    private Query query, studentQuery;
     private ArrayList<CardDate> arrAllCardTime = new ArrayList<>();
     private ArrayList<String> arrChooseCardTime = new ArrayList<>();
     private TextView tvNotFound, tvNotInputCardID, tvCardNotExist;
@@ -57,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private ArrayAdapter suggestAdapter;
     private HashSet<CalendarDay> mCldDays = new HashSet<>();
     private RadioGroup optionRdg;
+    private TextView tvName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +110,9 @@ public class MainActivity extends AppCompatActivity {
         inputCardID = findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
 
+        tvName = findViewById(R.id.tv_student_name);
+        tvName.setText("");
+
         cldView.setSelectedDate(CalendarDay.today());
 
         if (arrSuggestCardID != null && arrSuggestCardID.size() > 0) {
@@ -123,15 +128,18 @@ public class MainActivity extends AppCompatActivity {
         ((RadioButton) optionRdg.getChildAt(0)).setChecked(true);
 
         getCurrentData(0);
+        getStudentName();
 
         btnUpdateData.setOnClickListener(view -> {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            getStudentName();
             getCurrentData(getCurrentSelectedRadioButtonIndex());
         });
 
         btnInfo.setOnClickListener(view -> {
             Intent mIntent = new Intent(MainActivity.this, InfoActivity.class);
+            mIntent.putExtra("cardID", inputCardID.getText().toString());
             startActivity(mIntent);
         });
 
@@ -140,6 +148,37 @@ public class MainActivity extends AppCompatActivity {
         optionRdg.setOnCheckedChangeListener((group, checkedId) -> {
             getCurrentData(getCurrentSelectedRadioButtonIndex());
         });
+    }
+
+    private void getStudentName() {
+        if (!inputCardID.getText().toString().equals("")) {
+            myStudentRef = mFirebase.getReference("students");
+            studentQuery = myStudentRef.child(inputCardID.getText().toString());
+            studentQuery.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
+                    if (dataSnapshot.getChildrenCount() == 0) {
+                        tvName.setText("Card doesn't match to any student");
+                    } else {
+                        Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
+                        while(iterator.hasNext()) {
+                            DataSnapshot next = iterator.next();
+                            if (next.getKey().equals("name")) {
+                                tvName.setText("Học sinh: " + next.getValue().toString());
+                            }
+                        }
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+        } else {
+            tvName.setText("");
+        }
     }
 
     private void getCurrentData(int index) {

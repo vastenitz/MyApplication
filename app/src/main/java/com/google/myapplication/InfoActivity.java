@@ -2,6 +2,7 @@ package com.google.myapplication;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,6 +21,7 @@ import com.google.firebase.database.ValueEventListener;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.Locale;
 
 public class InfoActivity extends AppCompatActivity {
@@ -27,6 +29,7 @@ public class InfoActivity extends AppCompatActivity {
     private DatabaseReference mDatabaseReference;
     private String formatDate;
     private ImageView imgProfile;
+    private String cardId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,11 +39,10 @@ public class InfoActivity extends AppCompatActivity {
         Date dateObj = Calendar.getInstance().getTime();
         SimpleDateFormat df = new SimpleDateFormat("ddMMyyyy", Locale.getDefault());
         formatDate = df.format(dateObj);
-        mDatabaseReference = FirebaseDatabase.getInstance().getReference("RFID");
+        mDatabaseReference = FirebaseDatabase.getInstance().getReference("students");
 
         Intent infoIntent = getIntent();
-        String cardId = infoIntent.getStringExtra("cardID");
-
+        cardId = infoIntent.getStringExtra("cardID");
 
         tvName = findViewById(R.id.tv_name);
         tvBirthday = findViewById(R.id.tv_birthday);
@@ -51,34 +53,77 @@ public class InfoActivity extends AppCompatActivity {
         tvLocation = findViewById(R.id.tv_location);
         imgProfile = findViewById(R.id.img_profile);
 
-        mDatabaseReference.child(cardId).child("student").addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                UserInfo mUser = dataSnapshot.getValue(UserInfo.class);
-                if (mUser == null) {
-                    return;
+        resetData();
+        getStudentData();
+
+    }
+
+    private void getStudentData() {
+            mDatabaseReference.child(cardId).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    resetData();
+                    Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
+                    Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
+                    while(iterator.hasNext()) {
+                        DataSnapshot next = iterator.next();
+                        String tempNext = next.getValue().toString();
+                        setDataForView(next.getKey(), tempNext);
+                    }
                 }
 
-                tvName.setText(mUser.getName());
-                tvBirthday.setText(mUser.getBirthday());
-                tvClass.setText(mUser.getClassroom());
-                tvSchool.setText(mUser.getSchool());
-                tvPhoneNumber.setText(mUser.getPhoneNumber());
-                tvEmail.setText(mUser.getEmail());
-                tvLocation.setText(mUser.getLocation());
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+    }
+
+    private void resetData() {
+        tvName.setText("No data");
+        tvBirthday.setText("No data");
+        tvSchool.setText("No data");
+        tvClass.setText("No data");
+        tvPhoneNumber.setText("No data");
+        tvEmail.setText("No data");
+        tvLocation.setText("No data");
+        imgProfile.setImageResource(R.drawable.rfid);
+    }
+
+    private void setDataForView(String cardKey, String cardValue) {
+        switch (cardKey) {
+            case "name":
+                tvName.setText(cardValue);
+                break;
+            case "birthday":
+                tvBirthday.setText(cardValue);
+                break;
+            case "school":
+                tvSchool.setText(cardValue);
+                break;
+            case "classRoom":
+                tvClass.setText(cardValue);
+                break;
+            case "phoneNumber":
+                tvPhoneNumber.setText(cardValue);
+                break;
+            case "email":
+                tvEmail.setText(cardValue);
+                break;
+            case "location":
+                tvLocation.setText(cardValue);
+                break;
+            case "avatar":
                 Glide.with(InfoActivity.this)
-                        .load(mUser.getAvatar())
+                        .load(cardValue)
                         .placeholder(R.drawable.ic_person)
                         .error(R.drawable.ic_person)
                         .skipMemoryCache(true)
                         .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .into(imgProfile);
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError databaseError) {
-                Toast.makeText(InfoActivity.this, "Unable to load data", Toast.LENGTH_LONG).show();
-            }
-        });
+                break;
+        }
     }
+
+
 }

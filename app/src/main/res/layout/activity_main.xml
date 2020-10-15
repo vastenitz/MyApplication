@@ -8,30 +8,10 @@
     android:orientation="vertical"
     android:gravity="top">
 
-    <com.google.android.material.textfield.TextInputLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="30dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="30dp"
-        android:layout_marginBottom="8dp"
-        android:theme="@style/TextInputLayoutAppearance">
-
-        <com.google.myapplication.CardAutoCompleteTextView
-            android:id="@+id/input_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:singleLine="true">
-        </com.google.myapplication.CardAutoCompleteTextView>
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:gravity="center_horizontal"
-        android:orientation="horizontal">
+        android:layout_marginTop="20dp">
 
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btn_get_data"
@@ -41,20 +21,61 @@
             android:background="@drawable/button_text_background"
             android:padding="10dp"
             android:text="Update"
-            android:textColor="@android:color/white" />
+            android:textColor="@android:color/white"
+            android:layout_marginEnd="10dp"
+            android:textAllCaps="false"
+            android:layout_alignParentEnd="true"/>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:layout_toStartOf="@id/btn_get_data"
+            android:theme="@style/TextInputLayoutAppearance">
+
+            <com.google.myapplication.CardAutoCompleteTextView
+                android:id="@+id/input_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:layout_alignBaseline="@id/btn_get_data"
+                android:singleLine="true">
+            </com.google.myapplication.CardAutoCompleteTextView>
+        </com.google.android.material.textfield.TextInputLayout>
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp">
 
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/btn_get_info"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:layout_marginStart="20dp"
             android:background="@drawable/button_text_background"
             android:padding="10dp"
-            android:text="Info"
-            android:textColor="@android:color/white" />
+            android:text="Detail"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:layout_marginEnd="10dp"
+            android:layout_alignParentEnd="true"/>
 
-    </LinearLayout>
+        <TextView
+            android:id="@+id/tv_student_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:layout_toStartOf="@id/btn_get_info"
+            android:layout_marginEnd="20dp"
+            android:layout_marginStart="20dp"
+            android:textColor="@color/black"
+            android:textStyle="bold"
+            android:layout_alignBaseline="@id/btn_get_info"/>
+
+    </RelativeLayout>
 
     <RadioGroup
         android:id="@+id/option_rg"
