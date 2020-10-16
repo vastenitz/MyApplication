@@ -11,6 +11,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
@@ -35,6 +36,7 @@ import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.Iterator;
 
@@ -52,13 +54,14 @@ public class MainActivity extends AppCompatActivity {
     private Query query, studentQuery;
     private ArrayList<CardDate> arrAllCardTime = new ArrayList<>();
     private ArrayList<String> arrChooseCardTime = new ArrayList<>();
-    private TextView tvNotFound, tvNotInputCardID, tvCardNotExist;
+    private TextView tvNotFound, tvNotInputCardID, tvCardNotExist, tvNumberOfCup;
     private SharedPreferences mSharedPreferences;
     private ArrayList<String> arrSuggestCardID = new ArrayList<>();
     private ArrayAdapter suggestAdapter;
     private HashSet<CalendarDay> mCldDays = new HashSet<>();
     private RadioGroup optionRdg;
     private TextView tvName;
+    private LinearLayout lnlNumberOfCup;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,6 +88,7 @@ public class MainActivity extends AppCompatActivity {
         tvNotInputCardID = findViewById(R.id.tv_not_input_card);
         tvCardNotExist = findViewById(R.id.tv_card_not_exist);
         optionRdg = findViewById(R.id.option_rg);
+        tvNumberOfCup = findViewById(R.id.tv_number_of_cups);
 
         LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
         mLayoutManager.setOrientation(RecyclerView.VERTICAL);
@@ -110,6 +114,8 @@ public class MainActivity extends AppCompatActivity {
         inputCardID = findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
 
+        lnlNumberOfCup = findViewById(R.id.lnl_number_of_cup);
+
         tvName = findViewById(R.id.tv_student_name);
         tvName.setText("");
 
@@ -129,8 +135,10 @@ public class MainActivity extends AppCompatActivity {
 
         getCurrentData(0);
         getStudentName();
+        cldView.setSelectedDate(CalendarDay.today());
 
         btnUpdateData.setOnClickListener(view -> {
+            cldView.setSelectedDate(CalendarDay.today());
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             getStudentName();
@@ -193,8 +201,10 @@ public class MainActivity extends AppCompatActivity {
                     if (dataSnapshot.getChildrenCount() == 0) {
                         tvNotFound.setVisibility(GONE);
                         rcvCheckInOut.setVisibility(GONE);
+                        rcvWater.setVisibility(GONE);
                         tvNotInputCardID.setVisibility(GONE);
                         tvCardNotExist.setVisibility(View.VISIBLE);
+                        lnlNumberOfCup.setVisibility(GONE);
                     } else {
                         Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
                         arrAllCardTime.clear();
@@ -235,6 +245,8 @@ public class MainActivity extends AppCompatActivity {
             rcvCheckInOut.setVisibility(GONE);
             tvNotInputCardID.setVisibility(View.VISIBLE);
             tvCardNotExist.setVisibility(GONE);
+            rcvWater.setVisibility(GONE);
+            lnlNumberOfCup.setVisibility(GONE);
         }
     }
 
@@ -256,12 +268,16 @@ public class MainActivity extends AppCompatActivity {
             if (currentSelectedIndex == 0) {
                 rcvCheckInOut.setVisibility(View.VISIBLE);
                 rcvWater.setVisibility(GONE);
+                lnlNumberOfCup.setVisibility(GONE);
             } else if (currentSelectedIndex == 1) {
+                tvNumberOfCup.setText(arrChooseCardTime.size() + "");
                 rcvCheckInOut.setVisibility(GONE);
                 rcvWater.setVisibility(View.VISIBLE);
+                lnlNumberOfCup.setVisibility(View.VISIBLE);
             } else {
                 rcvWater.setVisibility(GONE);
                 rcvCheckInOut.setVisibility(GONE);
+                lnlNumberOfCup.setVisibility(GONE);
             }
             tvNotInputCardID.setVisibility(GONE);
             tvCardNotExist.setVisibility(GONE);
@@ -269,6 +285,7 @@ public class MainActivity extends AppCompatActivity {
             tvNotFound.setVisibility(View.VISIBLE);
             rcvCheckInOut.setVisibility(GONE);
             rcvWater.setVisibility(GONE);
+            lnlNumberOfCup.setVisibility(GONE);
             tvNotInputCardID.setVisibility(GONE);
             tvCardNotExist.setVisibility(GONE);
         }
