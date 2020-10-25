@@ -175,6 +175,7 @@ public class MainActivity extends AppCompatActivity {
             cldView.setSelectedDate(CalendarDay.today());
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            cldView.removeDecorators();
             getStudentName();
             getCurrentData(getCurrentSelectedRadioButtonIndex());
         });
@@ -321,7 +322,6 @@ public class MainActivity extends AppCompatActivity {
                             int cardDate = Integer.parseInt(next.getKey());
                             mCldDays.add(CalendarDay.from(cldView.getCurrentDate().getYear(), cldView.getCurrentDate().getMonth(), cardDate));
                         }
-                        cldView.removeDecorators();
                         cldView.addDecorator(new EventDecorator(MainActivity.this, mCldDays));
                     }
                 }
