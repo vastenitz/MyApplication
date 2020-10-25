@@ -17,6 +17,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
@@ -40,7 +41,9 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
+import com.prolificinteractive.materialcalendarview.OnMonthChangedListener;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -57,10 +60,12 @@ public class MainActivity extends AppCompatActivity {
     private CardAutoCompleteTextView inputCardID;
     private MaterialCalendarView cldView;
     private RecyclerView rcvCheckInOut, rcvWater;
-    private CardAdapter mCheckInOutAdapter, mWaterAdapter;
-    private Query query, studentQuery;
+    private CardAdapter mCheckInOutAdapter;
+    private WaterAdapter mWaterAdapter;
+    private Query query, studentQuery, dateDataQuery;
     private ArrayList<CardDate> arrAllCardTime = new ArrayList<>();
     private ArrayList<String> arrChooseCardTime = new ArrayList<>();
+    private ArrayList<WaterCard> arrChooseWaterTime = new ArrayList<>();
     private TextView tvNotFound, tvNotInputCardID, tvCardNotExist, tvNumberOfCup;
     private SharedPreferences mSharedPreferences;
     private ArrayList<String> arrSuggestCardID = new ArrayList<>();
@@ -72,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TelephonyManager telephonyManager;
     private int numberOfUsage = 0;
+    private int currentYear, currentMonth = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,8 +98,8 @@ public class MainActivity extends AppCompatActivity {
         mFirebase = FirebaseDatabase.getInstance();
         rcvCheckInOut = findViewById(R.id.rcv_check_in_out);
         rcvWater = findViewById(R.id.rcv_water);
-        mCheckInOutAdapter = new CardAdapter(arrChooseCardTime, 0);
-        mWaterAdapter = new CardAdapter(arrChooseCardTime, 1);
+        mCheckInOutAdapter = new CardAdapter(arrChooseCardTime);
+        mWaterAdapter = new WaterAdapter(arrChooseWaterTime);
         tvNotFound = findViewById(R.id.tv_not_found);
         tvNotInputCardID = findViewById(R.id.tv_not_input_card);
         tvCardNotExist = findViewById(R.id.tv_card_not_exist);
@@ -125,6 +131,9 @@ public class MainActivity extends AppCompatActivity {
         btnInfo = findViewById(R.id.btn_get_info);
         inputCardID = findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
+
+        currentYear = cldView.getCurrentDate().getYear();
+        currentMonth = cldView.getCurrentDate().getMonth();
 
         lnlNumberOfCup = findViewById(R.id.lnl_number_of_cup);
 
@@ -159,6 +168,7 @@ public class MainActivity extends AppCompatActivity {
 
         getCurrentData(0);
         getStudentName();
+        getDataOfCurrentDate(CalendarDay.today().getDay());
         cldView.setSelectedDate(CalendarDay.today());
 
         btnUpdateData.setOnClickListener(view -> {
@@ -175,10 +185,21 @@ public class MainActivity extends AppCompatActivity {
             startActivity(mIntent);
         });
 
-        cldView.setOnDateChangedListener((widget, date, selected) -> updateList(CommonUtils.getDateFromCalendar(date)));
+        cldView.setOnDateChangedListener((widget, date, selected) -> {
+            getDataOfCurrentDate(date.getDay());
+            updateList();
+        });
 
         optionRdg.setOnCheckedChangeListener((group, checkedId) -> {
-            getCurrentData(getCurrentSelectedRadioButtonIndex());
+            updateList();
+        });
+
+        cldView.setOnMonthChangedListener((widget, date) -> {
+            if (date.getYear() != currentYear || date.getMonth() != currentMonth) {
+                currentYear = date.getYear();
+                currentMonth = date.getMonth();
+                getCurrentData(getCurrentSelectedRadioButtonIndex());
+            }
         });
     }
 
@@ -267,7 +288,8 @@ public class MainActivity extends AppCompatActivity {
         if (!inputCardID.getText().toString().equals("")) {
             String referenceString = "RFID";
             myRef = mFirebase.getReference(referenceString);
-            query = myRef.child(inputCardID.getText().toString()).orderByValue();
+            query = myRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
+                    .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "");
             query.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
@@ -296,15 +318,11 @@ public class MainActivity extends AppCompatActivity {
 
                         while (iterator.hasNext()) {
                             DataSnapshot next = iterator.next();
-                            String cardDate = CommonUtils.getDate((Long) next.getValue());
-                            String cardTime = CommonUtils.getTime((Long) next.getValue());
-                            mCldDays.add(CalendarDay.from(Integer.parseInt(cardDate.substring(4, 8)), Integer.parseInt(cardDate.substring(2, 4)),
-                                    Integer.parseInt(cardDate.substring(0, 2))));
-                            arrAllCardTime.add(new CardDate(cardDate, cardTime));
+                            int cardDate = Integer.parseInt(next.getKey());
+                            mCldDays.add(CalendarDay.from(cldView.getCurrentDate().getYear(), cldView.getCurrentDate().getMonth(), cardDate));
                         }
                         cldView.removeDecorators();
                         cldView.addDecorator(new EventDecorator(MainActivity.this, mCldDays));
-                        updateList(CommonUtils.getDateFromCalendar(cldView.getSelectedDate()));
                     }
                 }
 
@@ -324,18 +342,37 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    void updateList(String daySelected) {
+    void getDataOfCurrentDate(int currentDate) {
+        dateDataQuery = myRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
+                .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "")
+                .child(currentDate + "");
         arrChooseCardTime.clear();
-        boolean isFound = false;
-        int currentSelectedIndex = getCurrentSelectedRadioButtonIndex();
-        for (int i = 0; i < arrAllCardTime.size(); i++) {
-            if (arrAllCardTime.get(i).getCardDay().equals(daySelected)) {
-                isFound = true;
-                arrChooseCardTime.add(arrAllCardTime.get(i).getCardTime());
-            } else if (isFound) {
-                break;
+        arrChooseWaterTime.clear();
+        dateDataQuery.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
+                Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
+                while(iterator.hasNext()) {
+                    DataSnapshot next = iterator.next();
+                    arrChooseCardTime.add(next.getKey());
+                    WaterFirebase mWaterFirebase = next.getValue(WaterFirebase.class);
+                    arrChooseWaterTime.add(new WaterCard(next.getKey(), mWaterFirebase.getT_Nuoc()));
+                    mCheckInOutAdapter.notifyDataSetChanged();
+                    mWaterAdapter.notifyDataSetChanged();
+                    updateList();
+                }
             }
-        }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+    }
+
+    void updateList() {
+        int currentSelectedIndex = getCurrentSelectedRadioButtonIndex();
 
         if (arrChooseCardTime.size() > 0) {
             tvNotFound.setVisibility(GONE);
@@ -363,8 +400,6 @@ public class MainActivity extends AppCompatActivity {
             tvNotInputCardID.setVisibility(GONE);
             tvCardNotExist.setVisibility(GONE);
         }
-        mCheckInOutAdapter.notifyDataSetChanged();
-        mWaterAdapter.notifyDataSetChanged();
     }
 
     private int getCurrentSelectedRadioButtonIndex() {
