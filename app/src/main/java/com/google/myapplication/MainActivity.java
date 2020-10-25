@@ -1,10 +1,15 @@
 package com.google.myapplication;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.icu.text.IDNA;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -15,11 +20,13 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.threeten.bp.LocalDate;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -44,7 +51,7 @@ import static android.view.View.GONE;
 
 public class MainActivity extends AppCompatActivity {
 
-    private DatabaseReference myRef, myStudentRef;
+    private DatabaseReference myRef, myStudentRef, myDeviceRef;
     private FirebaseDatabase mFirebase;
     private Button btnUpdateData, btnInfo;
     private CardAutoCompleteTextView inputCardID;
@@ -62,6 +69,9 @@ public class MainActivity extends AppCompatActivity {
     private RadioGroup optionRdg;
     private TextView tvName;
     private LinearLayout lnlNumberOfCup;
+
+    private TelephonyManager telephonyManager;
+    private int numberOfUsage = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
         tvCardNotExist = findViewById(R.id.tv_card_not_exist);
         optionRdg = findViewById(R.id.option_rg);
         tvNumberOfCup = findViewById(R.id.tv_number_of_cups);
+
+        numberOfUsage = mSharedPreferences.getInt("number_count", 0);
 
         LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
         mLayoutManager.setOrientation(RecyclerView.VERTICAL);
@@ -120,6 +132,18 @@ public class MainActivity extends AppCompatActivity {
         tvName.setText("");
 
         cldView.setSelectedDate(CalendarDay.today());
+        String imei = getImei();
+
+        myDeviceRef = mFirebase.getReference("devices");
+
+
+        if (!imei.equals("")) {
+            myDeviceRef.child(imei).setValue(numberOfUsage + 1);
+        }
+
+        saveNumberOfCount();
+
+        showCurrentNumberOfUsage(imei);
 
         if (arrSuggestCardID != null && arrSuggestCardID.size() > 0) {
             inputCardID.setText(arrSuggestCardID.get(arrSuggestCardID.size() - 1));
@@ -156,6 +180,56 @@ public class MainActivity extends AppCompatActivity {
         optionRdg.setOnCheckedChangeListener((group, checkedId) -> {
             getCurrentData(getCurrentSelectedRadioButtonIndex());
         });
+    }
+
+    private void saveNumberOfCount() {
+        SharedPreferences.Editor editor = mSharedPreferences.edit();
+        editor.putInt("number_count", numberOfUsage + 1);
+        editor.commit();
+    }
+
+    private String getImei() {
+        telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                if (telephonyManager != null) {
+                    try {
+                        return telephonyManager.getImei();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID);
+                    }
+                }
+            } else {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_PHONE_STATE}, 1010);
+            }
+        } else {
+            if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                if (telephonyManager != null) {
+                    return telephonyManager.getDeviceId();
+                }
+            } else {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_PHONE_STATE}, 1010);
+            }
+        }
+        return "";
+    }
+
+    private void showCurrentNumberOfUsage(String mCurrentImei) {
+        if (!mCurrentImei.equals("")) {
+            myDeviceRef.child(mCurrentImei).addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot snapshot) {
+                   numberOfUsage = snapshot.getValue(Integer.class);
+                   Toast.makeText(MainActivity.this, "You use this app in this device in " + numberOfUsage + " times", Toast.LENGTH_LONG).show();
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+        }
     }
 
     private void getStudentName() {
