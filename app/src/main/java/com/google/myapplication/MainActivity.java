@@ -47,6 +47,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 
@@ -54,7 +55,7 @@ import static android.view.View.GONE;
 
 public class MainActivity extends AppCompatActivity {
 
-    private DatabaseReference myRef, myStudentRef, myDeviceRef;
+    private DatabaseReference mWaterRef, mCheckInRef, myStudentRef, myDeviceRef;
     private FirebaseDatabase mFirebase;
     private Button btnUpdateData, btnInfo;
     private CardAutoCompleteTextView inputCardID;
@@ -63,10 +64,10 @@ public class MainActivity extends AppCompatActivity {
     private CardAdapter mCheckInOutAdapter;
     private WaterAdapter mWaterAdapter;
     private Query query, studentQuery, dateDataQuery;
-    private ArrayList<CardDate> arrAllCardTime = new ArrayList<>();
+    private ArrayList<String> arrAllCardTime = new ArrayList<>();
     private ArrayList<String> arrChooseCardTime = new ArrayList<>();
     private ArrayList<WaterCard> arrChooseWaterTime = new ArrayList<>();
-    private TextView tvNotFound, tvNotInputCardID, tvCardNotExist, tvNumberOfCup;
+    private TextView tvNotFound, tvNotInputCardID, tvCardNotExist, tvNumberOfCup, tvNoWaterData;
     private SharedPreferences mSharedPreferences;
     private ArrayList<String> arrSuggestCardID = new ArrayList<>();
     private ArrayAdapter suggestAdapter;
@@ -77,7 +78,8 @@ public class MainActivity extends AppCompatActivity {
 
     private TelephonyManager telephonyManager;
     private int numberOfUsage = 0;
-    private int currentYear, currentMonth = 0;
+    private int currentYear, currentMonth, currentDay = 0;
+    private int mCurrentOptionIndex = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,6 +105,7 @@ public class MainActivity extends AppCompatActivity {
         tvNotFound = findViewById(R.id.tv_not_found);
         tvNotInputCardID = findViewById(R.id.tv_not_input_card);
         tvCardNotExist = findViewById(R.id.tv_card_not_exist);
+        tvNoWaterData = findViewById(R.id.tv_water_not_data);
         optionRdg = findViewById(R.id.option_rg);
         tvNumberOfCup = findViewById(R.id.tv_number_of_cups);
 
@@ -132,8 +135,9 @@ public class MainActivity extends AppCompatActivity {
         inputCardID = findViewById(R.id.input_card);
         cldView = findViewById(R.id.card_calendar);
 
-        currentYear = cldView.getCurrentDate().getYear();
-        currentMonth = cldView.getCurrentDate().getMonth();
+        currentYear = CalendarDay.today().getYear();
+        currentMonth = CalendarDay.today().getMonth();
+        currentDay = CalendarDay.today().getDay();
 
         lnlNumberOfCup = findViewById(R.id.lnl_number_of_cup);
 
@@ -166,10 +170,9 @@ public class MainActivity extends AppCompatActivity {
 
         ((RadioButton) optionRdg.getChildAt(0)).setChecked(true);
 
-        getCurrentData(0);
-        getStudentName();
-        getDataOfCurrentDate(CalendarDay.today().getDay());
         cldView.setSelectedDate(CalendarDay.today());
+        getCheckInData(CalendarDay.today().getYear(), CalendarDay.today().getMonth(), CalendarDay.today().getDay());
+        getStudentName();
 
         btnUpdateData.setOnClickListener(view -> {
             cldView.setSelectedDate(CalendarDay.today());
@@ -177,7 +180,12 @@ public class MainActivity extends AppCompatActivity {
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             cldView.removeDecorators();
             getStudentName();
-            getCurrentData(getCurrentSelectedRadioButtonIndex());
+            if (mCurrentOptionIndex == 0) {
+                getCheckInData(CalendarDay.today().getYear(), CalendarDay.today().getMonth(), CalendarDay.today().getDay());
+            } else if (mCurrentOptionIndex == 1) {
+                getWaterData();
+                getWaterOfCurrentDate(CalendarDay.today().getDay());
+            }
         });
 
         btnInfo.setOnClickListener(view -> {
@@ -187,11 +195,25 @@ public class MainActivity extends AppCompatActivity {
         });
 
         cldView.setOnDateChangedListener((widget, date, selected) -> {
-            getDataOfCurrentDate(date.getDay());
-            updateList();
+            currentYear = date.getYear();
+            currentMonth = date.getMonth();
+            currentDay = date.getDay();
+
+            if (mCurrentOptionIndex == 1) {
+                getWaterOfCurrentDate(date.getDay());
+            } else if (mCurrentOptionIndex == 0) {
+                updateDataList(date.getYear(), date.getMonth(), date.getDay());
+            }
         });
 
         optionRdg.setOnCheckedChangeListener((group, checkedId) -> {
+            mCurrentOptionIndex = getCurrentSelectedRadioButtonIndex();
+            if (mCurrentOptionIndex == 0) {
+                getCheckInData(currentYear, currentMonth, currentDay);
+            } else if (mCurrentOptionIndex == 1) {
+                getWaterData();
+                getWaterOfCurrentDate(currentDay);
+            }
             updateList();
         });
 
@@ -199,7 +221,9 @@ public class MainActivity extends AppCompatActivity {
             if (date.getYear() != currentYear || date.getMonth() != currentMonth) {
                 currentYear = date.getYear();
                 currentMonth = date.getMonth();
-                getCurrentData(getCurrentSelectedRadioButtonIndex());
+                if (getCurrentSelectedRadioButtonIndex() == 1) {
+                    getWaterData();
+                }
             }
         });
     }
@@ -285,13 +309,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void getCurrentData(int index) {
+    private void getCheckInData(int year, int month, int day) {
         if (!inputCardID.getText().toString().equals("")) {
-            String referenceString = "RFID";
-            myRef = mFirebase.getReference(referenceString);
-            query = myRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
-                    .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "");
-            query.addListenerForSingleValueEvent(new ValueEventListener() {
+            mCheckInRef = mFirebase.getReference("CHECK IN").child("RFID");
+            mCheckInRef.child(inputCardID.getText().toString()).addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                     Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
@@ -302,9 +323,64 @@ public class MainActivity extends AppCompatActivity {
                         tvNotInputCardID.setVisibility(GONE);
                         tvCardNotExist.setVisibility(View.VISIBLE);
                         lnlNumberOfCup.setVisibility(GONE);
+                        tvNoWaterData.setVisibility(View.GONE);
                     } else {
                         Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
+                        if (!arrSuggestCardID.contains(inputCardID.getText().toString())) {
+                            arrSuggestCardID.add(inputCardID.getText().toString());
+                            suggestAdapter = new ArrayAdapter(MainActivity.this, android.R.layout.simple_list_item_1, arrSuggestCardID);
+                            inputCardID.setAdapter(suggestAdapter);
+                            Gson gson = new Gson();
+                            String json = gson.toJson(arrSuggestCardID);
+                            SharedPreferences.Editor editor = mSharedPreferences.edit();
+                            editor.putString("suggest", json);
+                            editor.commit();
+                        }
+                        mCldDays.clear();
                         arrAllCardTime.clear();
+                        while (iterator.hasNext()) {
+                            DataSnapshot next = iterator.next();
+                            if (!next.getKey().equals("ESP")) {
+                                long cardDate = (long) next.getValue();
+                                String cardDateString = CommonUtils.getDate(cardDate);
+                                String cardTimeString = CommonUtils.getTime(cardDate);
+                                mCldDays.add(CalendarDay.from(Integer.parseInt(cardDateString.substring(4, 8)), Integer.parseInt(cardDateString.substring(2, 4)),
+                                        Integer.parseInt(cardDateString.substring(0, 2))));
+                                arrAllCardTime.add(cardDateString + cardTimeString);
+                            }
+                        }
+                        updateDataList(year, month, day);
+                        cldView.addDecorator(new EventDecorator(MainActivity.this, mCldDays));
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                }
+            });
+        }
+    }
+
+    private void getWaterData() {
+        if (!inputCardID.getText().toString().equals("")) {
+            mWaterRef = mFirebase.getReference("QUAY ROT").child("RFID");
+            query = mWaterRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
+                    .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "");
+            query.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                    Iterable<DataSnapshot> snapshotIterator = dataSnapshot.getChildren();
+                    if (dataSnapshot.getChildrenCount() == 0) {
+                        tvNotFound.setVisibility(GONE);
+                        rcvCheckInOut.setVisibility(GONE);
+                        rcvWater.setVisibility(GONE);
+                        tvNotInputCardID.setVisibility(GONE);
+                        tvCardNotExist.setVisibility(View.GONE);
+                        lnlNumberOfCup.setVisibility(GONE);
+                        tvNoWaterData.setVisibility(View.VISIBLE);
+                    } else {
+                        Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
                         if (!arrSuggestCardID.contains(inputCardID.getText().toString())) {
                             arrSuggestCardID.add(inputCardID.getText().toString());
                             suggestAdapter = new ArrayAdapter(MainActivity.this, android.R.layout.simple_list_item_1, arrSuggestCardID);
@@ -318,6 +394,7 @@ public class MainActivity extends AppCompatActivity {
                         mCldDays.clear();
 
                         while (iterator.hasNext()) {
+                            tvNoWaterData.setVisibility(View.GONE);
                             DataSnapshot next = iterator.next();
                             int cardDate = Integer.parseInt(next.getKey());
                             mCldDays.add(CalendarDay.from(cldView.getCurrentDate().getYear(), cldView.getCurrentDate().getMonth(), cardDate));
@@ -339,14 +416,14 @@ public class MainActivity extends AppCompatActivity {
             tvCardNotExist.setVisibility(GONE);
             rcvWater.setVisibility(GONE);
             lnlNumberOfCup.setVisibility(GONE);
+            tvNoWaterData.setVisibility(GONE);
         }
     }
 
-    void getDataOfCurrentDate(int currentDate) {
-        dateDataQuery = myRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
+    void getWaterOfCurrentDate(int currentDate) {
+        dateDataQuery = mWaterRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
                 .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "")
                 .child(currentDate + "");
-        arrChooseCardTime.clear();
         arrChooseWaterTime.clear();
         dateDataQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -355,13 +432,13 @@ public class MainActivity extends AppCompatActivity {
                 Iterator<DataSnapshot> iterator = snapshotIterator.iterator();
                 while(iterator.hasNext()) {
                     DataSnapshot next = iterator.next();
-                    arrChooseCardTime.add(next.getKey());
                     WaterFirebase mWaterFirebase = next.getValue(WaterFirebase.class);
                     arrChooseWaterTime.add(new WaterCard(next.getKey(), mWaterFirebase.getT_Nuoc()));
-                    mCheckInOutAdapter.notifyDataSetChanged();
-                    mWaterAdapter.notifyDataSetChanged();
-                    updateList();
                 }
+                Collections.reverse(arrChooseWaterTime);
+
+                mWaterAdapter.notifyDataSetChanged();
+                updateList();
             }
 
             @Override
@@ -371,34 +448,76 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    void updateList() {
-        int currentSelectedIndex = getCurrentSelectedRadioButtonIndex();
-
-        if (arrChooseCardTime.size() > 0) {
-            tvNotFound.setVisibility(GONE);
-            if (currentSelectedIndex == 0) {
-                rcvCheckInOut.setVisibility(View.VISIBLE);
-                rcvWater.setVisibility(GONE);
-                lnlNumberOfCup.setVisibility(GONE);
-            } else if (currentSelectedIndex == 1) {
-                tvNumberOfCup.setText(arrChooseCardTime.size() + "");
-                rcvCheckInOut.setVisibility(GONE);
-                rcvWater.setVisibility(View.VISIBLE);
-                lnlNumberOfCup.setVisibility(View.VISIBLE);
-            } else {
-                rcvWater.setVisibility(GONE);
-                rcvCheckInOut.setVisibility(GONE);
-                lnlNumberOfCup.setVisibility(GONE);
+    void updateDataList(int year, int month, int day) {
+        boolean isFound = false;
+        arrChooseCardTime.clear();
+        String date = day + "" + month + "" + year + "";
+        for (int i = 0; i < arrAllCardTime.size(); i++) {
+            String cardTimeDate = arrAllCardTime.get(i).substring(0,8);
+            if (cardTimeDate.equals(date)) {
+                isFound = true;
+                arrChooseCardTime.add(arrAllCardTime.get(i).substring(8,16));
+            } else if (isFound) {
+                break;
             }
-            tvNotInputCardID.setVisibility(GONE);
-            tvCardNotExist.setVisibility(GONE);
-        } else {
-            tvNotFound.setVisibility(View.VISIBLE);
-            rcvCheckInOut.setVisibility(GONE);
-            rcvWater.setVisibility(GONE);
-            lnlNumberOfCup.setVisibility(GONE);
-            tvNotInputCardID.setVisibility(GONE);
-            tvCardNotExist.setVisibility(GONE);
+        }
+
+        Collections.reverse(arrChooseCardTime);
+
+        mCheckInOutAdapter.notifyDataSetChanged();
+        updateList();
+    }
+
+    void updateList() {
+        switch (mCurrentOptionIndex) {
+            case 0:
+                if (arrChooseCardTime.size() > 0) {
+                    tvNotFound.setVisibility(GONE);
+                    rcvCheckInOut.setVisibility(View.VISIBLE);
+                    rcvWater.setVisibility(GONE);
+                    lnlNumberOfCup.setVisibility(GONE);
+                    tvNotInputCardID.setVisibility(GONE);
+                    tvCardNotExist.setVisibility(GONE);
+                    tvNoWaterData.setVisibility(GONE);
+                } else {
+                    tvNotFound.setVisibility(View.VISIBLE);
+                    rcvCheckInOut.setVisibility(GONE);
+                    rcvWater.setVisibility(GONE);
+                    lnlNumberOfCup.setVisibility(GONE);
+                    tvNotInputCardID.setVisibility(GONE);
+                    tvCardNotExist.setVisibility(GONE);
+                    tvNoWaterData.setVisibility(GONE);
+                }
+                break;
+            case 1:
+                if (arrChooseWaterTime.size() > 0) {
+                    tvNotFound.setVisibility(GONE);
+                    tvNumberOfCup.setText(arrChooseWaterTime.size() + "");
+                    rcvCheckInOut.setVisibility(GONE);
+                    rcvWater.setVisibility(View.VISIBLE);
+                    lnlNumberOfCup.setVisibility(View.VISIBLE);
+                    tvNotInputCardID.setVisibility(GONE);
+                    tvCardNotExist.setVisibility(GONE);
+                    tvNoWaterData.setVisibility(GONE);
+                } else {
+                    tvNotFound.setVisibility(View.VISIBLE);
+                    rcvCheckInOut.setVisibility(GONE);
+                    rcvWater.setVisibility(GONE);
+                    lnlNumberOfCup.setVisibility(GONE);
+                    tvNotInputCardID.setVisibility(GONE);
+                    tvCardNotExist.setVisibility(GONE);
+                    tvNoWaterData.setVisibility(GONE);
+                }
+                break;
+            default:
+                tvNotFound.setVisibility(GONE);
+                rcvWater.setVisibility(GONE);
+                rcvCheckInOut.setVisibility(GONE);
+                lnlNumberOfCup.setVisibility(GONE);
+                tvNotInputCardID.setVisibility(GONE);
+                tvCardNotExist.setVisibility(GONE);
+                tvNoWaterData.setVisibility(GONE);
+                break;
         }
     }
 
