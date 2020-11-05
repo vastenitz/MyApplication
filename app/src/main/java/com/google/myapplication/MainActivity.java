@@ -421,9 +421,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void getWaterOfCurrentDate(int currentDate) {
+        String currentSelectedWaterDate = currentDate < 10? "0" + currentDate : currentDate + "";
         dateDataQuery = mWaterRef.child(inputCardID.getText().toString()).child(cldView.getCurrentDate().getYear() + "")
                 .child(cldView.getCurrentDate().getMonth() < 10? "0" + cldView.getCurrentDate().getMonth() : cldView.getCurrentDate().getMonth() + "")
-                .child(currentDate + "");
+                .child(currentSelectedWaterDate + "");
         arrChooseWaterTime.clear();
         dateDataQuery.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -451,7 +452,8 @@ public class MainActivity extends AppCompatActivity {
     void updateDataList(int year, int month, int day) {
         boolean isFound = false;
         arrChooseCardTime.clear();
-        String date = day + "" + month + "" + year + "";
+        String selectedDay = day < 10? "0" + day : day + "";
+        String date = selectedDay + "" + month + "" + year + "";
         for (int i = 0; i < arrAllCardTime.size(); i++) {
             String cardTimeDate = arrAllCardTime.get(i).substring(0,8);
             if (cardTimeDate.equals(date)) {
